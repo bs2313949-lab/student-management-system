@@ -1,0 +1,180 @@
+<?php
+require_once __DIR__ . '/db.php';
+requireLogin(['admin', 'student']);
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_mark'])) {
+    $studentId = (int) ($_POST['student_id'] ?? 0);
+    $courseId = (int) ($_POST['course_id'] ?? 0);
+    $examName = trim($_POST['exam_name'] ?? '');
+    $mark = (int) ($_POST['mark'] ?? 0);
+    $total = (int) ($_POST['total'] ?? 0);
+
+    if (isStudent()) {
+        $student = getStudentByUserId($pdo, (int) $_SESSION['user_id']);
+        if ($student) {
+            $studentId = (int) $student['id'];
+        }
+    }
+
+    if ($studentId > 0 && $courseId > 0 && $examName && $mark >= 0 && $total > 0) {
+        saveMark($pdo, [
+            'student_id' => $studentId,
+            'course_id' => $courseId,
+            'exam_name' => $examName,
+            'mark' => $mark,
+            'total' => $total,
+        ]);
+        $successMessage = 'Marks saved successfully.';
+    } else {
+        $errorMessage = 'Please provide valid mark details.';
+    }
+}
+
+if (isStudent()) {
+    $student = getStudentByUserId($pdo, (int) $_SESSION['user_id']);
+    $studentId = $student ? (int) $student['id'] : 0;
+    $marks = $studentId ? getMarksForStudent($pdo, $studentId) : [];
+} else {
+    $marks = getAllMarkEntries($pdo);
+}
+
+ob_start();
+?>
+<?= navLinks() ?>
+<main class='container'>
+    <div class='page-head'>
+        <div>
+            <p class='eyebrow'>Evaluation</p>
+            <h1>Marks</h1>
+        </div>
+    </div>
+
+    <?php if (isset($successMessage)): ?>
+        <?= alertBox('success', $successMessage) ?>
+    <?php endif; ?>
+
+    <?php if (isset($errorMessage)): ?>
+        <?= alertBox('error', $errorMessage) ?>
+    <?php endif; ?>
+
+    <?php if (isAdmin()): ?>
+        <section class='panel'>
+            <div class='panel-head'>
+                <h2>Update Student Marks</h2>
+            </div>
+            <form method='POST' class='form-grid'>
+                <input type='hidden' name='save_mark' value='1'>
+
+                <label>
+                    Student
+                    <select name='student_id' required>
+                        <?= getStudentSelect($pdo) ?>
+                    </select>
+                </label>
+
+                <label>
+                    Course
+                    <select name='course_id' required>
+                        <?= getAdminCourseSelect($pdo) ?>
+                    </select>
+                </label>
+
+                <label>
+                    Exam Name
+                    <input type='text' name='exam_name' placeholder='Midterm, Quiz, Final' required>
+                </label>
+
+                <label>
+                    Marks Obtained
+                    <input type='number' name='mark' min='0' required>
+                </label>
+
+                <label>
+                    Total Marks
+                    <input type='number' name='total' min='1' required>
+                </label>
+
+                <div class='full-width form-actions'>
+                    <button type='submit' class='btn btn-primary'>Save Marks</button>
+                </div>
+            </form>
+        </section>
+    <?php else: ?>
+        <section class='panel'>
+            <div class='panel-head'>
+                <h2>Add / Update Your Marks</h2>
+            </div>
+            <form method='POST' class='form-grid'>
+                <input type='hidden' name='save_mark' value='1'>
+                <input type='hidden' name='student_id' value='<?= (int) $studentId ?>'>
+
+                <label>
+                    Course
+                    <select name='course_id' required>
+                        <?= getAdminCourseSelect($pdo, (int) ($student['course_id'] ?? 0)) ?>
+                    </select>
+                </label>
+
+                <label>
+                    Exam Name
+                    <input type='text' name='exam_name' placeholder='Midterm, Quiz, Final' required>
+                </label>
+
+                <label>
+                    Marks Obtained
+                    <input type='number' name='mark' min='0' required>
+                </label>
+
+                <label>
+                    Total Marks
+                    <input type='number' name='total' min='1' required>
+                </label>
+
+                <div class='full-width form-actions'>
+                    <button type='submit' class='btn btn-primary'>Save Marks</button>
+                </div>
+            </form>
+        </section>
+    <?php endif; ?>
+
+    <section class='panel'>
+        <div class='panel-head'>
+            <h2>Marks Records</h2>
+        </div>
+        <div class='table-wrap'>
+            <table>
+                <thead>
+                    <tr>
+                        <?php if (isAdmin()): ?>
+                            <th>Student</th>
+                        <?php endif; ?>
+                        <th>Course</th>
+                        <th>Exam</th>
+                        <th>Score</th>
+                        <th>Percent</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if (empty($marks)): ?>
+                        <tr><td colspan='<?= isAdmin() ? 5 : 4 ?>'>No marks available.</td></tr>
+                    <?php else: ?>
+                        <?php foreach ($marks as $mark): ?>
+                            <tr>
+                                <?php if (isAdmin()): ?>
+                                    <td><?= safeInput($mark['student_name']) ?></td>
+                                <?php endif; ?>
+                                <td><?= safeInput($mark['course_code'] ?? '') ?> - <?= safeInput($mark['course_name'] ?? '') ?></td>
+                                <td><?= safeInput($mark['exam_name']) ?></td>
+                                <td><?= (int) $mark['mark'] ?>/<?= (int) $mark['total'] ?></td>
+                                <td><?= number_format((float) $mark['score_percent'], 1) ?>%</td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </section>
+</main>
+<?php
+renderLayout('Marks', navLinks() . ob_get_clean());
+?>
